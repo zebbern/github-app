@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://github.com/user-attachments/assets/54141f1c-8a6f-4570-a7b3-4ea87e911ecf" alt="GitHub App Screenshot" width="200"/>
+<img src="https://github.com/user-attachments/assets/54141f1c-8a6f-4570-a7b3-4ea87e911ecf" alt="GitHub App Screenshot" width="140"/>
 
   <h3>A desktop application for GitHub management</h3>
 
