@@ -13,7 +13,7 @@
 
 <hr/>
 
-The GitHub Management Desktop App provides a comprehensive suite of tools for developers who manage multiple GitHub accounts or repositories. Built with PyQt5 and leveraging the GitHub REST API, this application streamlines common GitHub operations through an intuitive dark-themed interface.
+The GitHub Management Desktop App provides a comprehensive suite of tools for developers who manage multiple GitHub accounts or repositories. Built with PyQt5 and leveraging the GitHub REST API, this application streamlines common GitHub operations through an intuitive interface.
 
 > "Manage multiple GitHub accounts, repositories, and operations seamlessly from your desktop without constant browser switching or re-authentication."
 
