@@ -1,8 +1,7 @@
 <div align="center">
+  <h2>A desktop application for GitHub management</h3>
 
 <img src="https://github.com/user-attachments/assets/54141f1c-8a6f-4570-a7b3-4ea87e911ecf" alt="GitHub App Screenshot" width="140"/>
-
-  <h3>A desktop application for GitHub management</h3>
 
 ![GitHub App](https://img.shields.io/badge/GitHub-Desktop%20App-2ea44f?style=flat-square&logo=github)
 ![Python](https://img.shields.io/badge/python-3.6+-3776AB.svg?style=flat-square&logo=python&logoColor=white)
