@@ -1,5 +1,10 @@
 <div align="center">
-  <h2>A desktop application for GitHub management</h3>
+  
+  <h3>
+    
+    Desktop app for GitHub management
+  
+  </h3>
 
 <img src="https://github.com/user-attachments/assets/54141f1c-8a6f-4570-a7b3-4ea87e911ecf" alt="GitHub App Screenshot" width="140"/>
 
@@ -9,13 +14,19 @@
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)
 ![Last Commit](https://img.shields.io/badge/Last%20Commit-May%202025-blue?style=flat-square)
 
+<h6>
+
+Manage multiple GitHub accounts, repositories, and operations seamlessly from your desktop without constant browser switching or re-authentication
+
+</h6>
+
+
 </div>
 
-<hr/>
+<br>
 
-The GitHub Management Desktop App provides a comprehensive suite of tools for developers who manage multiple GitHub accounts or repositories. Built with PyQt5 and leveraging the GitHub REST API, this application streamlines common GitHub operations through an intuitive interface.
-
-> "Manage multiple GitHub accounts, repositories, and operations seamlessly from your desktop without constant browser switching or re-authentication."
+> [!Note]
+> The GitHub Management Desktop App provides a comprehensive suite of tools for developers who manage multiple GitHub accounts or repositories. Built with PyQt5 and leveraging the GitHub REST API, this application streamlines common GitHub operations through an intuitive interface.
 
 <hr/>
 
