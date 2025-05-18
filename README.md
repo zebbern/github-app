@@ -23,7 +23,7 @@
 
 <h6>
 
-Manage multiple GitHub accounts, repositories, and operations seamlessly from your desktop without constant browser switching or re-authentication
+<em>Manage multiple GitHub accounts, repositories, and operations seamlessly from your desktop without constant browser switching or re-authentication</em>
 
 </h6>
 
