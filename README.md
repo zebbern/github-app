@@ -17,6 +17,7 @@
 
 ![GitHub App](https://img.shields.io/badge/GitHub-Desktop%20App-2ea44f?style=flat-square&logo=github)
 ![Python](https://img.shields.io/badge/python-3.6+-3776AB.svg?style=flat-square&logo=python&logoColor=white)
+
 ![PyQt5](https://img.shields.io/badge/PyQt5-41CD52.svg?style=flat-square&logo=qt&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)
 ![Last Commit](https://img.shields.io/badge/Last%20Commit-May%202025-blue?style=flat-square)
