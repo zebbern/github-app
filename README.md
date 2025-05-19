@@ -26,7 +26,6 @@
 
 </h6>
 
-
 </div>
 
 <br>
@@ -75,6 +74,26 @@
   </tr>
 </table>
 
+## Installation
+
+<h6>Prerequisites</h6>
+
+Before installation, ensure you have Python 3.6+ installed on your system.
+
+<h6>Setup Process</h6>
+
+```bash
+# Clone the repository
+git clone https://github.com/zebbern/github-app.git
+cd github-app
+
+# Install required dependencies
+pip install -r requirements.txt
+
+# Run the application
+python github.py
+```
+
 <div align="center">
   <details open>
     <summary><h4>Interface Screenshots</h4></summary>
@@ -118,24 +137,3 @@
     </table>
   </details>
 </div>
-
-
-## Installation
-
-<h6>Prerequisites</h6>
-
-Before installation, ensure you have Python 3.6+ installed on your system.
-
-<h6>Setup Process</h6>
-
-```bash
-# Clone the repository
-git clone https://github.com/zebbern/github-app.git
-cd github-app
-
-# Install required dependencies
-pip install -r requirements.txt
-
-# Run the application
-python github.py
-```
