@@ -75,46 +75,44 @@
   </tr>
 </table>
 
-## Application Preview
-
 <div align="center">
   <details open>
     <summary><h4>Interface Screenshots</h4></summary>
     <table>
       <tr>
         <td align="center">
-          <img src="https://via.placeholder.com/400x225.png?text=User+Management" alt="User Management" width="400"/>
+          <img src="https://github.com/user-attachments/assets/4f09ec03-03a6-45f2-bb2c-1b9c4f800bdf" alt="User Management" width="500"/>
           <br>
-          <sub><sup>User Management Interface</sup></sub>
+          <sub>Profile Management</sup>
         </td>
         <td align="center">
-          <img src="https://via.placeholder.com/400x225.png?text=Repository+Browser" alt="Repository Browser" width="400"/>
+          <img src="https://github.com/user-attachments/assets/5720df95-0321-465a-9040-9242bd56373a" alt="Repository Browser" width="500"/>
           <br>
-          <sub><sup>Repository Browser & File Editor</sup></sub>
-        </td>
-      </tr>
-      <tr>
-        <td align="center">
-          <img src="https://via.placeholder.com/400x225.png?text=Profile+Editor" alt="Profile Editor" width="400"/>
-          <br>
-          <sub><sup>Profile Editor & Following Management</sup></sub>
-        </td>
-        <td align="center">
-          <img src="https://via.placeholder.com/400x225.png?text=Markdown+Preview" alt="Markdown Preview" width="400"/>
-          <br>
-          <sub><sup>Live Markdown Preview with GitHub-style Rendering</sup></sub>
+          <sub>Repository Browser & File Editor</sup>
         </td>
       </tr>
       <tr>
         <td align="center">
-          <img src="https://via.placeholder.com/400x225.png?text=Login+Screen" alt="Login Screen" width="400"/>
+          <img src="https://github.com/user-attachments/assets/d772006d-3520-46d0-9f09-79b75c90e3cf" alt="Profile Editor" width="500"/>
           <br>
-          <sub><sup>User Login Interface</sup></sub>
+          <sub>Star Repos</sup></sub>
         </td>
         <td align="center">
-          <img src="https://via.placeholder.com/400x225.png?text=Token+Management" alt="Token Management" width="400"/>
+          <img src="https://github.com/user-attachments/assets/11f5d8d8-2c01-4014-ab45-61f053a2aedf" alt="Markdown Preview" width="500"/>
           <br>
-          <sub><sup>API Token Management Panel</sup></sub>
+          <sub>Live Markdown Preview with GitHub-style Rendering</sub>
+        </td>
+      </tr>
+      <tr>
+        <td align="center">
+          <img src="https://github.com/user-attachments/assets/7ad78d0f-b450-48b5-8a2f-9a74905974ca" width="500"/>
+          <br>
+          <sub>Repository Editor</sub>
+        </td>
+        <td align="center">
+          <img src="https://github.com/user-attachments/assets/3f1efc10-9e40-4229-81e5-cc0b8bc445c1" alt="Token Management" width="500"/>
+          <br>
+          <sub>Login Interface</sub>
         </td>
       </tr>
     </table>
