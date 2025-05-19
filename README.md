@@ -22,7 +22,7 @@
 
 <h6>
 
-<em>Manage multiple GitHub accounts, repositories, and operations seamlessly from your desktop without constant browser switching or re-authentication</em>
+<em>Manage multiple GitHub accounts, repositories, and operations seamlessly from your desktop without constant browser switching or re-authentication while also supporting `Token/API Login`</em>
 
 </h6>
 
