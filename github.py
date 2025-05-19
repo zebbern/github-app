@@ -12,7 +12,8 @@ from PyQt5.QtWidgets import (
     QListWidget, QListWidgetItem, QCheckBox, QProgressBar, QTextEdit,
     QLineEdit, QFileDialog, QTabWidget, QGroupBox, QSplitter, QToolBar,
     QComboBox, QStatusBar, QTreeWidget, QTreeWidgetItem, QMessageBox,
-    QInputDialog, QScrollArea, QPlainTextEdit, QStyle, QSlider
+    QInputDialog, QScrollArea, QPlainTextEdit, QStyle, QSlider,
+    QStackedWidget, QButtonGroup
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QRect, QPoint, QMimeData, QUrl
 from PyQt5.QtGui import QPainter, QBrush, QPixmap, QColor, QIcon, QDragEnterEvent, QDropEvent
@@ -50,6 +51,10 @@ QPushButton:pressed {
 QPushButton:disabled {
     background-color: #3a3a3a;
     color: #888888;
+}
+QPushButton:checked {
+    background-color: #505050;
+    font-weight: bold;
 }
 QCheckBox {
     spacing: 6px;
@@ -402,6 +407,8 @@ class MultiAccountThread(QThread):
                     success += 1
         self.done.emit(True, f"Completed {success}/{total_ops} operations")
 
+
+
 class AvatarLabel(QLabel):
     def set_avatar(self, url):
         try:
@@ -599,10 +606,52 @@ class TokenManagerDialog(QDialog):
 class LoginWindow(QDialog):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("GitHub Login")
+        # Set frameless window
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        
         self.resize(500, 300)
         self.move_to_center()
-        lay = QVBoxLayout(self)
+        
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Custom title bar
+        title_bar = QWidget()
+        title_bar.setFixedHeight(40)
+        title_bar.setStyleSheet("background-color: #1a1a1a;")
+        title_bar_layout = QHBoxLayout(title_bar)
+        title_bar_layout.setContentsMargins(10, 0, 10, 0)
+        
+        title_label = QLabel("Select a GitHub from your tokens:")
+        title_label.setStyleSheet("color: white; font-weight: bold; font-size: 12pt;")
+        
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(35, 30)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: white;
+                border: none;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #E81123;
+                color: white;
+            }
+        """)
+        close_btn.clicked.connect(self.reject)
+        
+        title_bar_layout.addWidget(title_label)
+        title_bar_layout.addStretch()
+        title_bar_layout.addWidget(close_btn)
+        
+        # Content area
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        
+        # Existing controls
         self.list_tokens = QListWidget()
         self.btn_login = QPushButton("Login")
         self.btn_login.setEnabled(False)
@@ -613,8 +662,8 @@ class LoginWindow(QDialog):
         self.selected_token = None
         self.selected_user = None
 
-        info_label = QLabel("Select a GitHub account from your tokens:")
-        info_label.setStyleSheet("font-weight: bold; font-size: 13pt;")
+
+
 
         hl = QHBoxLayout()
         hl.addWidget(self.btn_manage)
@@ -623,17 +672,38 @@ class LoginWindow(QDialog):
         hl.addWidget(self.btn_refresh)
         hl.addWidget(self.btn_login)
 
-        lay.addWidget(info_label)
-        lay.addWidget(self.list_tokens)
-        lay.addLayout(hl)
 
+        content_layout.addWidget(self.list_tokens)
+        content_layout.addLayout(hl)
+
+        # Add to main layout
+        main_layout.addWidget(title_bar)
+        main_layout.addWidget(content)
+        
+        # Connect signals
         self.btn_login.clicked.connect(self.accept)
         self.btn_refresh.clicked.connect(self.load_tokens)
         self.btn_manage.clicked.connect(self.manage_tokens)
         self.btn_edit_token.clicked.connect(self.edit_selected_token)
         self.list_tokens.itemClicked.connect(self.token_selected)
 
+        # Store for dragging the window
+        self.drag_pos = None
+        
+        # Load tokens
         self.load_tokens()
+        
+    def mousePressEvent(self, event):
+        """Handle mouse press events for moving the window"""
+        if event.button() == Qt.LeftButton:
+            self.drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        """Handle mouse move events for dragging the window"""
+        if event.buttons() == Qt.LeftButton and hasattr(self, 'drag_pos'):
+            self.move(event.globalPos() - self.drag_pos)
+            event.accept()
 
     def move_to_center(self):
         screen_rect = QApplication.desktop().screenGeometry()
@@ -705,7 +775,6 @@ class LoginWindow(QDialog):
                 QMessageBox.warning(self, "Invalid Token", "The token you entered is invalid")
 
 
-
 class MultiTokenDialog(QDialog):
     def __init__(self, tokens_dict, parent=None):
         super().__init__(parent)
@@ -739,68 +808,6 @@ class MultiTokenDialog(QDialog):
             self.reject()
         else:
             self.accept()
-
-class ExtendedToolBar(QToolBar):
-    """Custom toolbar that shows user switching and token management"""
-    def __init__(self, parent=None, change_user_func=None, manage_func=None):
-        super().__init__(parent)
-        self.setMovable(False)
-        self.setFloatable(False)
-        self.change_user_func = change_user_func
-        self.manage_func = manage_func
-        self.parent = parent
-        
-        # User selector dropdown
-        self.user_selector = QComboBox()
-        self.user_selector.setMinimumWidth(150)
-        self.user_selector.currentIndexChanged.connect(self.on_user_changed)
-        self.load_users()
-        
-        self.addWidget(QLabel("User: "))
-        self.addWidget(self.user_selector)
-        
-        # Manage tokens action
-        self.add_manage_action()
-        
-    def load_users(self):
-        """Load available GitHub users from tokens"""
-        self.user_selector.clear()
-        self.users_data = {}
-        
-        load_dotenv(find_dotenv(usecwd=True))
-        for k, v in os.environ.items():
-            if k.startswith("GITHUB_TOKEN_"):
-                api = GitHubAPI(v)
-                ok, data = api.validate_token()
-                if ok:
-                    username = data['login']
-                    self.user_selector.addItem(username)
-                    self.users_data[username] = (k[13:], v, data)  # Store token name, token value, and user data
-        
-        # Set current user
-        if hasattr(self.parent, 'user_data') and self.parent.user_data:
-            current_login = self.parent.user_data.get('login', '')
-            index = self.user_selector.findText(current_login)
-            if index >= 0:
-                self.user_selector.setCurrentIndex(index)
-
-    def add_manage_action(self):
-        act = self.addAction(QIcon(), "Manage Tokens", self.on_manage)
-        act.setToolTip("Manage saved tokens")
-
-    def on_user_changed(self, index):
-        """Handle user selection change"""
-        if index < 0 or not self.change_user_func:
-            return
-            
-        username = self.user_selector.currentText()
-        if username in self.users_data:
-            token_name, token, user_data = self.users_data[username]
-            self.change_user_func(token, user_data)
-
-    def on_manage(self):
-        if self.manage_func:
-            self.manage_func()
 
 class DropArea(QWidget):
     """Widget that accepts file drops for uploading to GitHub"""
@@ -1012,8 +1019,189 @@ class MarkdownPreview(QWidget):
         # Maintain fixed zoom at 75%
         self.preview.setZoomFactor(0.75)
 
-class RepoBrowserTab(QWidget):
-    """A tab to display the user's repositories, navigate files, edit, save, upload, delete."""
+class ReadmeCreatorTab(QWidget):
+    """Tab for creating and editing GitHub README.md files"""
+    def __init__(self, api, user_data):
+        super().__init__()
+        self.api = api
+        self.user_data = user_data
+        layout = QVBoxLayout(self)
+        
+        # Top control row - Repository selector, save button, preview toggle
+        top_controls = QHBoxLayout()
+        repo_label = QLabel("Repository:")
+        self.repo_selector = QComboBox()
+        self.repo_selector.setMinimumWidth(200)
+        self.load_repos_btn = QPushButton("Load Repos")
+        self.load_repos_btn.clicked.connect(self.load_repositories)
+        self.save_btn = QPushButton("Save README")
+        self.save_btn.clicked.connect(self.save_readme)
+        self.preview_toggle = QPushButton("Preview")
+        self.preview_toggle.setCheckable(True)
+        self.preview_toggle.toggled.connect(self.toggle_preview)
+        
+        top_controls.addWidget(repo_label)
+        top_controls.addWidget(self.repo_selector)
+        top_controls.addWidget(self.load_repos_btn)
+        top_controls.addWidget(self.save_btn)
+        top_controls.addWidget(self.preview_toggle)
+        top_controls.addStretch()
+        
+        # Template elements buttons
+        template_controls = QHBoxLayout()
+        self.template_buttons = [
+            ("Table", self.insert_table),
+            ("Header", self.insert_header),
+            ("List", self.insert_list),
+            ("Link", self.insert_link),
+            ("Image", self.insert_image),
+            ("Code Block", self.insert_code_block),
+            ("Badge", self.insert_badge),
+            ("Horizontal Rule", self.insert_hr)
+        ]
+        
+        for btn_text, btn_func in self.template_buttons:
+            btn = QPushButton(btn_text)
+            btn.clicked.connect(btn_func)
+            template_controls.addWidget(btn)
+        
+        # Main editor and preview area
+        self.editor_preview = QStackedWidget()
+        
+        # Editor
+        self.editor = QPlainTextEdit()
+        self.editor.setPlaceholderText("# Your README.md content here...\n\nStart writing your GitHub README or use the template buttons above.")
+        
+        # Preview
+        self.preview = MarkdownPreview()
+        
+        self.editor_preview.addWidget(self.editor)
+        self.editor_preview.addWidget(self.preview)
+        
+        # Connect editor changes to preview updates
+        self.editor.textChanged.connect(self.update_preview)
+        
+        # Add everything to the main layout
+        layout.addLayout(top_controls)
+        layout.addLayout(template_controls)
+        layout.addWidget(self.editor_preview)
+        
+        # Initial state
+        self.load_repositories()
+    
+    def load_repositories(self):
+        """Load user repositories into the combo box"""
+        self.repo_selector.clear()
+        ok, repos = self.api.get_repos()
+        if ok and isinstance(repos, list):
+            for repo in repos:
+                self.repo_selector.addItem(repo["name"])
+    
+    def toggle_preview(self, checked):
+        """Toggle between editor and preview views"""
+        if checked:
+            # Update preview before switching
+            self.update_preview()
+            self.editor_preview.setCurrentIndex(1)
+            self.preview_toggle.setText("Edit")
+        else:
+            self.editor_preview.setCurrentIndex(0)
+            self.preview_toggle.setText("Preview")
+    
+    def update_preview(self):
+        """Update markdown preview"""
+        content = self.editor.toPlainText()
+        self.preview.update_preview(content, "markdown")
+    
+    def save_readme(self):
+        """Save README.md to the selected repository"""
+        repo_name = self.repo_selector.currentText()
+        if not repo_name:
+            QMessageBox.warning(self, "Error", "Please select a repository")
+            return
+        
+        content = self.editor.toPlainText()
+        owner = self.user_data.get("login", "")
+        
+        # Check if README.md already exists in the repository
+        ok, result = self.api.get_contents(owner, repo_name, "README.md")
+        
+        if ok and isinstance(result, dict) and "sha" in result:
+            # Update existing README
+            sha = result["sha"]
+            success, msg = self.api.update_file(
+                owner, repo_name, "README.md", "Update README.md", content, sha
+            )
+        else:
+            # Create new README
+            success, msg = self.api.upload_file(
+                owner, repo_name, "README.md", content.encode('utf-8')
+            )
+        
+        if success:
+            QMessageBox.information(self, "Success", f"README.md saved to {repo_name}")
+        else:
+            QMessageBox.warning(self, "Error", f"Failed to save README.md: {msg}")
+    
+    # Template insertion functions
+    def insert_table(self):
+        """Insert a markdown table template"""
+        table = """
+| Header 1 | Header 2 | Header 3 |
+|----------|----------|----------|
+| Row 1    | Data     | Data     |
+| Row 2    | Data     | Data     |
+| Row 3    | Data     | Data     |
+"""
+        self.editor.insertPlainText(table)
+    
+    def insert_header(self):
+        """Insert header template"""
+        headers = """# Main Header
+## Secondary Header
+### Tertiary Header
+"""
+        self.editor.insertPlainText(headers)
+    
+    def insert_list(self):
+        """Insert list template"""
+        list_template = """
+- Item 1
+- Item 2
+- Item 3
+  - Nested item 1
+  - Nested item 2
+"""
+        self.editor.insertPlainText(list_template)
+    
+    def insert_link(self):
+        """Insert link template"""
+        self.editor.insertPlainText("[Link Text](https://example.com)")
+    
+    def insert_image(self):
+        """Insert image template"""
+        self.editor.insertPlainText("![Alt Text](https://example.com/image.png)")
+    
+    def insert_code_block(self):
+        """Insert code block template"""
+        code_block = """```python
+# Python code example
+def hello_world():
+    print("Hello, GitHub!")
+```"""
+        self.editor.insertPlainText(code_block)
+    
+    def insert_badge(self):
+        """Insert badge template"""
+        badge = "[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)"
+        self.editor.insertPlainText(badge)
+    
+    def insert_hr(self):
+        """Insert horizontal rule"""
+        self.editor.insertPlainText("\n---\n")
+
+class ModifiedRepoBrowserTab(QWidget):
+    """Modified Repo Browser tab with search/replace moved and no New Folder button"""
     def __init__(self, api, user_data):
         super().__init__()
         self.api = api
@@ -1026,8 +1214,8 @@ class RepoBrowserTab(QWidget):
         self.current_repo = ""
         self.path_history = []
 
-        # Repository selection section with Create New button
-        repo_selection = QHBoxLayout()
+        # Repository selection section with Create New button (not including search/replace anymore)
+        top_row = QHBoxLayout()
         
         # Combobox with placeholder text
         self.cmb_repos = QComboBox()
@@ -1040,9 +1228,10 @@ class RepoBrowserTab(QWidget):
         btn_create_repo = QPushButton("Create Repo")
         btn_create_repo.clicked.connect(self.show_create_repo_dialog)
         
-        repo_selection.addWidget(self.cmb_repos)
-        repo_selection.addWidget(btn_create_repo)
-        repo_selection.addStretch()
+        # Add repo controls to top row
+        top_row.addWidget(self.cmb_repos)
+        top_row.addWidget(btn_create_repo)
+        top_row.addStretch()
         
         # Main content area
         content_layout = QVBoxLayout()
@@ -1069,7 +1258,6 @@ class RepoBrowserTab(QWidget):
         
         self.tree_files = QTreeWidget()
         self.tree_files.setColumnCount(1)
-        # Change the header from "Files" to empty - we're showing it in the path_label now
         self.tree_files.setHeaderLabels([""])
         self.tree_files.setStyleSheet("""
             QTreeWidget {
@@ -1093,24 +1281,21 @@ class RepoBrowserTab(QWidget):
         self.tree_files.itemClicked.connect(self.on_item_clicked)
         self.tree_files.itemDoubleClicked.connect(self.on_item_double_clicked)
         
-        # Button group - file operations buttons on left side
+        # Button group - file operations buttons on left side (No New Folder button)
         button_layout = QHBoxLayout()
         
-        # New File/Folder buttons
+        # New File button only (No New Folder button)
         self.btn_new_file = QPushButton("New File")
-        self.btn_new_folder = QPushButton("New Folder")
         self.btn_save_file = QPushButton("Save File")
         self.btn_delete_file = QPushButton("Delete File")
         self.btn_delete_folder = QPushButton("Delete Folder")
         
         self.btn_new_file.clicked.connect(self.create_new_file)
-        self.btn_new_folder.clicked.connect(self.create_new_folder)
         self.btn_save_file.clicked.connect(self.save_current_file)
         self.btn_delete_file.clicked.connect(self.delete_current_file)
         self.btn_delete_folder.clicked.connect(self.delete_current_folder)
         
         button_layout.addWidget(self.btn_new_file)
-        button_layout.addWidget(self.btn_new_folder)
         button_layout.addWidget(self.btn_save_file)
         button_layout.addWidget(self.btn_delete_file)
         button_layout.addWidget(self.btn_delete_folder)
@@ -1133,7 +1318,7 @@ class RepoBrowserTab(QWidget):
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
         
-        # Add search and replace functionality
+        # Find/Replace controls moved here above the editor
         search_replace_layout = QHBoxLayout()
         search_label = QLabel("Find:")
         self.search_edit = QLineEdit()
@@ -1212,7 +1397,7 @@ class RepoBrowserTab(QWidget):
         content_layout.addWidget(main_splitter)
         
         # Add to main layout
-        self.layout.addLayout(repo_selection)
+        self.layout.addLayout(top_row)
         self.layout.addLayout(content_layout)
         
         # Initialize
@@ -1224,30 +1409,6 @@ class RepoBrowserTab(QWidget):
         
         # Load repos
         self.load_user_repos()
-    
-    def find_text(self):
-        """Find text in the editor"""
-        search_text = self.search_edit.text()
-        if not search_text:
-            return
-            
-        # Start search from current cursor position
-        cursor = self.text_content.textCursor()
-        # If nothing is selected, start from beginning
-        if not cursor.hasSelection():
-            cursor.setPosition(0)
-            self.text_content.setTextCursor(cursor)
-            
-        # Find next occurrence
-        found = self.text_content.find(search_text)
-        if not found:
-            # Try from the beginning
-            cursor.setPosition(0)
-            self.text_content.setTextCursor(cursor)
-            found = self.text_content.find(search_text)
-            
-        if not found:
-            QMessageBox.information(self, "Search", f"No occurrences of '{search_text}' found")
     
     def replace_text(self):
         """Replace selected text in the editor"""
@@ -1317,42 +1478,6 @@ class RepoBrowserTab(QWidget):
                 self.load_directory_contents()
             else:
                 QMessageBox.warning(self, "Error", f"Failed to create file: {msg}")
-    
-    def create_new_folder(self):
-        """Create a new folder in the current directory"""
-        if not self.current_repo:
-            QMessageBox.warning(self, "Error", "Please select a repository first")
-            return
-            
-        foldername, ok = QInputDialog.getText(
-            self,
-            "Create New Folder",
-            "Enter folder name:",
-            QLineEdit.Normal,
-            ""
-        )
-        
-        if ok and foldername:
-            # GitHub doesn't have direct folder creation - create a .gitkeep file instead
-            owner = self.user_data.get("login", "")
-            repo_name = self.current_repo
-            
-            # Build path
-            path = self.current_path
-            if path:
-                path += "/"
-            path += foldername + "/.gitkeep"
-            
-            # Empty content for the .gitkeep file
-            content = ""
-            
-            # Upload file to create the directory
-            success, msg = self.api.upload_file(owner, repo_name, path, content.encode('utf-8'))
-            if success:
-                QMessageBox.information(self, "Success", f"Folder '{foldername}' created successfully")
-                self.load_directory_contents()
-            else:
-                QMessageBox.warning(self, "Error", f"Failed to create folder: {msg}")
     
     def delete_current_folder(self):
         """Delete the selected folder"""
@@ -1548,7 +1673,1029 @@ class RepoBrowserTab(QWidget):
         if upload_count > 0:
             QMessageBox.information(
                 self, 
-                "Upload Complete", 
+                "Success", 
+                f"Successfully uploaded {upload_count} file(s)" + 
+                (f"\nFailed to upload {failed_count} file(s)" if failed_count > 0 else "")
+            )
+            self.load_directory_contents()  # Refresh to show the new files
+        elif failed_count > 0:
+            QMessageBox.warning(
+                self, 
+                "Upload Failed", 
+                f"Failed to upload {failed_count} file(s)"
+            )
+
+    def update_preview(self):
+        """Update the preview panel based on the current content"""
+        content = self.text_content.toPlainText()
+        
+        # Determine file type based on extension or content
+        file_type = "markdown"
+        if self.selected_path:
+            if self.selected_path.lower().endswith(('.md', '.markdown')):
+                file_type = "markdown"
+            else:
+                file_type = "code"
+        
+        self.preview.update_preview(content, file_type)
+
+    def load_user_repos(self):
+        ok, data = self.api.get_repos()
+        if not ok or not isinstance(data, list):
+            return
+        # Clear but keep the placeholder
+        self.cmb_repos.clear()
+        self.cmb_repos.addItem("Select Repo")
+        self.cmb_repos.setItemData(0, QColor(120, 120, 120), Qt.ForegroundRole)
+        
+        for r in data:
+            self.cmb_repos.addItem(r["name"])
+        self.cmb_repos.setCurrentIndex(0)
+
+    def load_directory_contents(self):
+        """Load contents of the current directory path"""
+        self.tree_files.clear()
+        if not self.current_repo:
+            return
+            
+        owner = self.user_data.get("login", "")
+        if not owner:
+            return
+            
+        ok, content = self.api.get_contents(owner, self.current_repo, self.current_path)
+        if not ok:
+            QMessageBox.warning(self, "Error", f"Failed to load repository contents: {content}")
+            return
+            
+        if not isinstance(content, list):
+            # If it's a single file, handle it differently
+            content = [content]
+            
+        # First add folders
+        for item in sorted(content, key=lambda x: (x["type"] != "dir", x["name"].lower())):
+            node = QTreeWidgetItem([item["name"]])
+            node.setData(0, Qt.UserRole, item)
+            
+            # Set folder icon or file icon based on type
+            if item["type"] == "dir":
+                node.setIcon(0, self.style().standardIcon(QStyle.SP_DirIcon))
+            else:
+                node.setIcon(0, self.style().standardIcon(QStyle.SP_FileIcon))
+                
+            self.tree_files.addTopLevelItem(node)
+
+    def on_item_clicked(self, item, col):
+        data = item.data(0, Qt.UserRole)
+        if not data:
+            return
+            
+        if data["type"] == "dir":
+            # Store selected folder for delete operation
+            self.selected_folder = data
+            self.selected_file = None
+            self.selected_sha = None
+            self.selected_path = ""
+            self.text_content.clear()
+            self.text_content.setReadOnly(True)
+            self.preview.update_preview("", "text")
+        elif data["type"] == "file":
+            # Clear selected folder
+            self.selected_folder = None
+            
+            # Load file content
+            owner = self.user_data.get("login", "")
+            repo_name = self.current_repo
+            path = data["path"]
+            ok, res = self.api.get_contents(owner, repo_name, path)
+            if ok and isinstance(res, dict):
+                if "content" in res:
+                    content_bytes = base64.b64decode(res["content"])
+                    self.text_content.setPlainText(content_bytes.decode('utf-8', errors='replace'))
+                    self.text_content.setReadOnly(False)
+                    self.selected_file = data
+                    self.selected_sha = res["sha"]
+                    self.selected_path = path
+                    
+                    # Update preview based on file type
+                    if path.lower().endswith(('.md', '.markdown')):
+                        self.current_file_type = "markdown"
+                    else:
+                        self.current_file_type = "code"
+                    
+                    self.update_preview()
+                else:
+                    self.text_content.setPlainText("")
+                    self.text_content.setReadOnly(True)
+                    self.preview.update_preview("", "text")
+            else:
+                self.text_content.setPlainText("")
+                self.text_content.setReadOnly(True)
+                self.preview.update_preview("", "text")
+
+    def save_current_file(self):
+        if not self.selected_file or not self.selected_sha:
+            return
+        owner = self.user_data.get("login", "")
+        repo_name = self.current_repo
+        path = self.selected_path
+        new_content = self.text_content.toPlainText()
+        message = f"Update file {path}"
+        ok, res = self.api.update_file(owner, repo_name, path, message, new_content, self.selected_sha)
+        if ok:
+            QMessageBox.information(self, "Success", f"File '{path}' updated successfully.")
+            # Re-fetch the file to get new SHA
+            ok2, refreshed = self.api.get_contents(owner, repo_name, path)
+            if ok2 and isinstance(refreshed, dict):
+                self.selected_sha = refreshed.get("sha", "")
+        else:
+            QMessageBox.warning(self, "Error", str(res))
+
+    def delete_current_file(self):
+        if not self.selected_file or not self.selected_sha:
+            return
+        owner = self.user_data.get("login", "")
+        repo_name = self.current_repo
+        path = self.selected_path
+        message = f"Delete file {path}"
+        reply = QMessageBox.question(self, "Confirm", f"Really delete '{path}'?",
+                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            ok, res = self.api.delete_file(owner, repo_name, path, message, self.selected_sha)
+        if ok:
+            QMessageBox.information(self, "Success", f"File '{path}' deleted successfully.")
+            self.text_content.clear()
+            self.text_content.setReadOnly(True)
+            self.selected_file = None
+            self.selected_sha = None
+            self.selected_path = ""
+            self.preview.update_preview("", "text")
+            self.load_directory_contents()
+        else:
+            QMessageBox.warning(self, "Error", str(res))
+
+
+class TitleBar(QWidget):
+    """Custom title bar to replace standard window decorations"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent = parent
+        self.setFixedHeight(40)
+        self.setAutoFillBackground(True)
+        
+        # Set the background color
+        palette = self.palette()
+        palette.setColor(self.backgroundRole(), QColor("#1a1a1a"))
+        self.setPalette(palette)
+        
+        # Create layout
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(5, 0, 5, 0)
+        
+        # Window buttons
+        self.btn_minimize = QPushButton("_")
+        self.btn_minimize.setFixedSize(30, 30)
+        self.btn_minimize.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: white;
+                border: none;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #333333;
+            }
+        """)
+        
+        self.btn_close = QPushButton("✕")
+        self.btn_close.setFixedSize(30, 30)
+        self.btn_close.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: white;
+                border: none;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #E81123;
+                color: white;
+            }
+        """)
+        
+        # Connect button signals
+        self.btn_minimize.clicked.connect(self.parent.showMinimized)
+        self.btn_close.clicked.connect(self.parent.close)
+        
+        # Add widgets to layout
+        layout.addStretch()
+        layout.addWidget(self.btn_minimize)
+        layout.addWidget(self.btn_close)
+        
+        self.setLayout(layout)
+        
+    def mousePressEvent(self, event):
+        """Handle mouse press events for moving the window"""
+        if event.button() == Qt.LeftButton:
+            self.drag_pos = event.globalPos() - self.parent.frameGeometry().topLeft()
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        """Handle mouse move events for dragging the window"""
+        if event.buttons() == Qt.LeftButton and hasattr(self, 'drag_pos'):
+            self.parent.move(event.globalPos() - self.drag_pos)
+            event.accept()
+
+class AccountSelectorWidget(QWidget):
+    """Widget for account selection at the top of the sidebar"""
+    user_changed = pyqtSignal(str, dict)
+    tokens_managed = pyqtSignal()
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent = parent
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
+        
+        # User selector dropdown
+        self.user_selector = QComboBox()
+        self.user_selector.setMinimumWidth(150)
+        self.user_selector.currentIndexChanged.connect(self.on_user_changed)
+        
+        # Manage tokens button
+        self.manage_tokens_btn = QPushButton("Manage Tokens")
+        self.manage_tokens_btn.clicked.connect(self.on_manage_tokens)
+        
+        # Add to layout
+        layout.addWidget(self.user_selector)
+        layout.addWidget(self.manage_tokens_btn)
+        
+        self.setLayout(layout)
+        self.setStyleSheet("""
+            background-color: #252525;
+            border-bottom: 1px solid #444;
+            padding: 5px;
+        """)
+        
+    def load_users(self, current_user=None):
+        """Load available GitHub users from tokens"""
+        self.user_selector.clear()
+        self.users_data = {}
+        
+        load_dotenv(find_dotenv(usecwd=True))
+        for k, v in os.environ.items():
+            if k.startswith("GITHUB_TOKEN_"):
+                api = GitHubAPI(v)
+                ok, data = api.validate_token()
+                if ok:
+                    username = data['login']
+                    self.user_selector.addItem(username)
+                    self.users_data[username] = (k[13:], v, data)  # Store token name, token value, and user data
+        
+        # Set current user if provided
+        if current_user:
+            index = self.user_selector.findText(current_user)
+            if index >= 0:
+                self.user_selector.setCurrentIndex(index)
+    
+    def on_user_changed(self, index):
+        """Handle user selection change"""
+        if index < 0:
+            return
+            
+        username = self.user_selector.currentText()
+        if username in self.users_data:
+            token_name, token, user_data = self.users_data[username]
+            self.user_changed.emit(token, user_data)
+    
+    def on_manage_tokens(self):
+        """Open token management dialog"""
+        dlg = TokenManagerDialog(self)
+        if dlg.exec_():
+            self.load_users(self.user_selector.currentText())
+            self.tokens_managed.emit()
+
+class SidebarWidget(QWidget):
+    """Custom sidebar for tab navigation"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(0, 0, 0, 0)  # Remove all margins
+        self.layout.setSpacing(0)                  # Remove spacing
+        
+        # Create account selector at the top
+        self.account_selector = AccountSelectorWidget(self)
+        self.layout.addWidget(self.account_selector)
+        
+        # Navigation buttons group
+        self.button_group = QButtonGroup(self)
+        self.button_group.setExclusive(True)
+        
+        # Style for sidebar buttons
+        self.button_style = """
+            QPushButton {
+                border: none;
+                border-radius: 0;
+                text-align: left;
+                padding: 10px;
+                padding-left: 20px;
+                font-size: 11pt;
+                background-color: transparent;
+                color: #e0e0e0;
+            }
+            QPushButton:hover {
+                background-color: #3a3a3a;
+            }
+            QPushButton:checked {
+                background-color: #444444;
+                border-left: 4px solid #77b300;
+                padding-left: 16px;
+            }
+        """
+        
+        # Create a container for the navigation buttons
+        self.nav_container = QWidget()
+        self.nav_layout = QVBoxLayout(self.nav_container)
+        self.nav_layout.setContentsMargins(0, 10, 0, 0)  # Add some top padding after account selector
+        self.nav_layout.setSpacing(5)
+        
+        # Add buttons container to main layout
+        self.layout.addWidget(self.nav_container, 1)  # 1 = stretch factor
+        
+        # Set fixed width
+        self.setFixedWidth(180)
+        self.setStyleSheet("""
+            background-color: #252525;
+            border-right: 1px solid #444;
+        """)
+    
+    def add_button(self, text, index):
+        """Add a new button to the sidebar"""
+        button = QPushButton(text)
+        button.setCheckable(True)
+        button.setStyleSheet(self.button_style)
+        button.setProperty("tab_index", index)
+        self.button_group.addButton(button)
+        self.nav_layout.addWidget(button)
+        return button
+    
+    def add_spacer(self):
+        """Add a spacer to the sidebar"""
+        self.nav_layout.addSpacing(20)
+    
+    def add_stretch(self):
+        """Add a stretch to the bottom of the navigation area"""
+        self.nav_layout.addStretch(1)
+
+class ProfileTab(QWidget):
+    """Enhanced Profile tab with additional features"""
+    def __init__(self, api, user_data, parent=None):
+        super().__init__(parent)
+        self.api = api
+        self.user_data = user_data
+        self.parent = parent
+        self.layout = QVBoxLayout(self)
+        
+        # User info section with editable fields
+        user_info_layout = QVBoxLayout()
+        
+        # Username and avatar row
+        username_row = QHBoxLayout()
+        self.lbl_avatar = AvatarLabel()
+        self.lbl_avatar.setFixedSize(60, 60)
+        if self.user_data.get('avatar_url'):
+            self.lbl_avatar.set_avatar(self.user_data['avatar_url'])
+            
+        # Username (not editable)
+        username_label = QLabel("User:")
+        username_label.setStyleSheet("font-weight: bold;")
+        self.username_value = QLabel(self.user_data.get('login', ''))
+        self.username_value.setStyleSheet("font-weight: bold; font-size: 14pt;")
+        
+        username_row.addWidget(self.lbl_avatar)
+        username_row.addWidget(username_label)
+        username_row.addWidget(self.username_value)
+        username_row.addStretch()
+        
+        user_info_layout.addLayout(username_row)
+        
+        # Editable fields
+        form_layout = QFormLayout()
+        
+        # Name field
+        self.name_edit = QLineEdit(self.user_data.get('name', ''))
+        form_layout.addRow("Name:", self.name_edit)
+        
+        # Bio field
+        self.bio_edit = QTextEdit()
+        self.bio_edit.setText(self.user_data.get('bio', ''))
+        self.bio_edit.setMaximumHeight(100)
+        form_layout.addRow("Bio:", self.bio_edit)
+        
+        # Location field
+        self.location_edit = QLineEdit(self.user_data.get('location', ''))
+        form_layout.addRow("Location:", self.location_edit)
+        
+        # Website field
+        self.website_edit = QLineEdit(self.user_data.get('blog', ''))
+        form_layout.addRow("Website:", self.website_edit)
+        
+        # Company field
+        self.company_edit = QLineEdit(self.user_data.get('company', ''))
+        form_layout.addRow("Company:", self.company_edit)
+        
+        # Save button
+        save_button = QPushButton("Save Profile")
+        save_button.clicked.connect(self.save_profile)
+        
+        user_info_layout.addLayout(form_layout)
+        user_info_layout.addWidget(save_button)
+        
+        self.layout.addLayout(user_info_layout)
+        
+        # Following section
+        following_group = QGroupBox("Users You Follow")
+        following_layout = QVBoxLayout(following_group)
+        
+        # Use a scroll area for the following list
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        
+        # Container for the user widgets
+        self.following_container = QWidget()
+        self.following_list_layout = QVBoxLayout(self.following_container)
+        self.following_list_layout.setAlignment(Qt.AlignTop)
+        
+        scroll_area.setWidget(self.following_container)
+        following_layout.addWidget(scroll_area)
+        
+        self.layout.addWidget(following_group)
+        
+        # Load following list automatically
+        self.fetch_following()
+        
+    def save_profile(self):
+        """Save the profile changes"""
+        ok, result = self.api.update_profile(
+            name=self.name_edit.text(),
+            bio=self.bio_edit.toPlainText(),
+            company=self.company_edit.text(),
+            location=self.location_edit.text(),
+            blog=self.website_edit.text()
+        )
+        
+        if ok:
+            # Update internal user data
+            self.user_data.update({
+                'name': self.name_edit.text(),
+                'bio': self.bio_edit.toPlainText(),
+                'company': self.company_edit.text(),
+                'location': self.location_edit.text(),
+                'blog': self.website_edit.text()
+            })
+            QMessageBox.information(self, "Success", "Profile updated successfully")
+        else:
+            QMessageBox.warning(self, "Error", f"Failed to update profile: {result}")
+            
+    def unfollow_user(self, username):
+        """Unfollow the specified user"""
+        reply = QMessageBox.question(
+            self,
+            "Confirm Unfollow",
+            f"Are you sure you want to unfollow {username}?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            ok, msg = self.api.unfollow_user(username)
+            if ok:
+                QMessageBox.information(self, "Success", f"Successfully unfollowed {username}")
+                self.fetch_following()  # Refresh the following list
+            else:
+                QMessageBox.warning(self, "Error", f"Failed to unfollow: {msg}")
+
+    def fetch_following(self):
+        """Fetch and display the list of users being followed"""
+        # Clear existing widgets
+        while self.following_list_layout.count():
+            child = self.following_list_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        ok, data = self.api.get_following()
+        if ok:
+            for u in data:
+                user_widget = UserWidget(
+                    u["login"], 
+                    u["avatar_url"], 
+                    show_check=False,
+                    show_unfollow=True
+                )
+                user_widget.unfollow_clicked.connect(self.unfollow_user)
+                self.following_list_layout.addWidget(user_widget)
+                
+            # Add a spacer at the end
+            self.following_list_layout.addStretch()
+        else:
+            error_label = QLabel("Failed to fetch following list")
+            error_label.setStyleSheet("color: red;")
+            self.following_list_layout.addWidget(error_label)
+
+
+class ModifiedRepoBrowserTab(QWidget):
+    """Modified Repo Browser tab with search/replace moved and no New Folder button"""
+    def __init__(self, api, user_data):
+        super().__init__()
+        self.api = api
+        self.user_data = user_data
+        self.layout = QVBoxLayout(self)
+        self.setLayout(self.layout)
+        
+        # Current navigation path
+        self.current_path = ""
+        self.current_repo = ""
+        self.path_history = []
+
+        # Repository selection section with Create New button and search/replace
+        top_row = QHBoxLayout()
+        
+        # Combobox with placeholder text
+        self.cmb_repos = QComboBox()
+        self.cmb_repos.addItem("Select Repo")
+        self.cmb_repos.setItemData(0, QColor(120, 120, 120), Qt.ForegroundRole)
+        self.cmb_repos.setCurrentIndex(0)
+        self.cmb_repos.currentIndexChanged.connect(self.on_repo_changed)
+        
+        # Add Create Repository button next to dropdown
+        btn_create_repo = QPushButton("Create Repo")
+        btn_create_repo.clicked.connect(self.show_create_repo_dialog)
+        
+        # Find/Replace controls moved up here
+        search_label = QLabel("Find:")
+        self.search_edit = QLineEdit()
+        self.search_edit.returnPressed.connect(self.find_text)
+        
+        replace_label = QLabel("Replace:")
+        self.replace_edit = QLineEdit()
+        
+        self.find_btn = QPushButton("Find")
+        self.replace_btn = QPushButton("Replace")
+        self.replace_all_btn = QPushButton("Replace All")
+        
+        self.find_btn.clicked.connect(self.find_text)
+        self.replace_btn.clicked.connect(self.replace_text)
+        self.replace_all_btn.clicked.connect(self.replace_all_text)
+        
+        # Add all controls to top row
+        top_row.addWidget(self.cmb_repos)
+        top_row.addWidget(btn_create_repo)
+        top_row.addWidget(search_label)
+        top_row.addWidget(self.search_edit)
+        top_row.addWidget(replace_label)
+        top_row.addWidget(self.replace_edit)
+        top_row.addWidget(self.find_btn)
+        top_row.addWidget(self.replace_btn)
+        top_row.addWidget(self.replace_all_btn)
+        top_row.addStretch()
+        
+        # Main content area
+        content_layout = QVBoxLayout()
+        
+        # Tree view header with back button
+        tree_header = QHBoxLayout()
+        self.btn_back = QPushButton("⬅ Back")
+        self.btn_back.clicked.connect(self.go_back)
+        self.btn_back.setEnabled(False)
+        self.path_label = QLabel("/")
+        self.path_label.setStyleSheet("color: #ffffff;")
+        
+        tree_header.addWidget(self.btn_back)
+        tree_header.addWidget(self.path_label)
+        tree_header.addStretch()
+        
+        # Files and editor
+        main_splitter = QSplitter(Qt.Horizontal)
+        
+        # Left side - tree and drop area
+        left_widget = QWidget()
+        left_layout = QVBoxLayout(left_widget)
+        left_layout.addLayout(tree_header)
+        
+        self.tree_files = QTreeWidget()
+        self.tree_files.setColumnCount(1)
+        self.tree_files.setHeaderLabels([""])
+        self.tree_files.setStyleSheet("""
+            QTreeWidget {
+                background-color: #2c2c2c;
+                color: #e0e0e0;
+                border: 1px solid #444;
+            }
+            QTreeWidget::item {
+                height: 24px;
+            }
+            QTreeWidget::item:selected {
+                background-color: #565656;
+            }
+            QHeaderView::section {
+                background-color: #3a3a3a;
+                color: #e0e0e0;
+                padding: 5px;
+                border: 1px solid #444;
+            }
+        """)
+        self.tree_files.itemClicked.connect(self.on_item_clicked)
+        self.tree_files.itemDoubleClicked.connect(self.on_item_double_clicked)
+        
+        # Button group - file operations buttons on left side (No New Folder button)
+        button_layout = QHBoxLayout()
+        
+        # New File button only (No New Folder button)
+        self.btn_new_file = QPushButton("New File")
+        self.btn_save_file = QPushButton("Save File")
+        self.btn_delete_file = QPushButton("Delete File")
+        self.btn_delete_folder = QPushButton("Delete Folder")
+        
+        self.btn_new_file.clicked.connect(self.create_new_file)
+        self.btn_save_file.clicked.connect(self.save_current_file)
+        self.btn_delete_file.clicked.connect(self.delete_current_file)
+        self.btn_delete_folder.clicked.connect(self.delete_current_folder)
+        
+        button_layout.addWidget(self.btn_new_file)
+        button_layout.addWidget(self.btn_save_file)
+        button_layout.addWidget(self.btn_delete_file)
+        button_layout.addWidget(self.btn_delete_folder)
+        button_layout.addStretch()
+        
+        # Drop and select area
+        self.drop_area = DropArea()
+        self.drop_area.fileDrop.connect(self.handle_file_drop)
+        
+        # Add browse button to drop area
+        browse_btn = QPushButton("Browse Files")
+        browse_btn.clicked.connect(self.browse_files)
+        
+        left_layout.addWidget(self.tree_files)
+        left_layout.addLayout(button_layout)
+        left_layout.addWidget(self.drop_area)
+        left_layout.addWidget(browse_btn)
+        
+        # Right side - editor and preview
+        right_widget = QWidget()
+        right_layout = QVBoxLayout(right_widget)
+        
+        # Text editor with live preview in a vertical splitter
+        self.editor_preview_splitter = QSplitter(Qt.Vertical)
+        
+        # Text editor for code/markdown
+        self.text_content = QPlainTextEdit()
+        self.text_content.setPlaceholderText("File content here...")
+        self.text_content.setReadOnly(True)
+        self.text_content.textChanged.connect(self.update_preview)
+        
+        # Make text content scrollbar match preview scrollbar style
+        self.text_content.setStyleSheet("""
+            QPlainTextEdit {
+                background-color: #2c2c2c;
+                color: #e0e0e0;
+                border: 1px solid #444;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #2c2c2c;
+                width: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #565656;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
+        """)
+        
+        # Markdown/code preview panel
+        self.preview = MarkdownPreview()
+        
+        self.editor_preview_splitter.addWidget(self.text_content)
+        self.editor_preview_splitter.addWidget(self.preview)
+        
+        # Set split sizes (40% editor, 60% preview)
+        self.editor_preview_splitter.setSizes([400, 600])
+        
+        right_layout.addWidget(self.editor_preview_splitter)
+        
+        # Add widgets to main splitter
+        main_splitter.addWidget(left_widget)
+        main_splitter.addWidget(right_widget)
+        main_splitter.setSizes([300, 700])  # Proportional sizes
+        
+        content_layout.addWidget(main_splitter)
+        
+        # Add to main layout
+        self.layout.addLayout(top_row)
+        self.layout.addLayout(content_layout)
+        
+        # Initialize
+        self.selected_file = None
+        self.selected_sha = None
+        self.selected_path = ""
+        self.current_file_type = "text"
+        self.selected_folder = None
+        
+        # Load repos
+        self.load_user_repos()
+        
+    def find_text(self):
+        """Find text in the editor"""
+        search_text = self.search_edit.text()
+        if not search_text:
+            return
+            
+        # Start search from current cursor position
+        cursor = self.text_content.textCursor()
+        # If nothing is selected, start from beginning
+        if not cursor.hasSelection():
+            cursor.setPosition(0)
+            self.text_content.setTextCursor(cursor)
+            
+        # Find next occurrence
+        found = self.text_content.find(search_text)
+        if not found:
+            # Try from the beginning
+            cursor.setPosition(0)
+            self.text_content.setTextCursor(cursor)
+            found = self.text_content.find(search_text)
+            
+        if not found:
+            QMessageBox.information(self, "Search", f"No occurrences of '{search_text}' found")
+    
+    def replace_text(self):
+        """Replace selected text in the editor"""
+        search_text = self.search_edit.text()
+        replace_text = self.replace_edit.text()
+        
+        if not search_text:
+            return
+            
+        # Replace selected text if it matches search text
+        cursor = self.text_content.textCursor()
+        if cursor.hasSelection() and cursor.selectedText() == search_text:
+            cursor.insertText(replace_text)
+            
+        # Find next occurrence
+        self.find_text()
+    
+    def replace_all_text(self):
+        """Replace all occurrences of search text"""
+        search_text = self.search_edit.text()
+        replace_text = self.replace_edit.text()
+        
+        if not search_text:
+            return
+            
+        content = self.text_content.toPlainText()
+        if search_text in content:
+            new_content = content.replace(search_text, replace_text)
+            self.text_content.setPlainText(new_content)
+            count = content.count(search_text)
+            QMessageBox.information(self, "Replace All", f"Replaced {count} occurrences")
+        else:
+            QMessageBox.information(self, "Replace All", f"No occurrences of '{search_text}' found")
+    
+    def create_new_file(self):
+        """Create a new file in the current directory"""
+        if not self.current_repo:
+            QMessageBox.warning(self, "Error", "Please select a repository first")
+            return
+            
+        filename, ok = QInputDialog.getText(
+            self,
+            "Create New File",
+            "Enter file name:",
+            QLineEdit.Normal,
+            ""
+        )
+        
+        if ok and filename:
+            # Create empty file
+            owner = self.user_data.get("login", "")
+            repo_name = self.current_repo
+            
+            # Build path
+            path = self.current_path
+            if path:
+                path += "/"
+            path += filename
+            
+            # Empty content
+            content = ""
+            
+            # Upload file
+            success, msg = self.api.upload_file(owner, repo_name, path, content.encode('utf-8'))
+            if success:
+                QMessageBox.information(self, "Success", f"File '{filename}' created successfully")
+                self.load_directory_contents()
+            else:
+                QMessageBox.warning(self, "Error", f"Failed to create file: {msg}")
+    
+    def delete_current_folder(self):
+        """Delete the selected folder"""
+        if not self.selected_folder:
+            QMessageBox.warning(self, "Error", "Please select a folder first")
+            return
+            
+        folder_path = self.selected_folder["path"]
+        folder_name = self.selected_folder["name"]
+        
+        reply = QMessageBox.question(
+            self,
+            "Confirm Delete",
+            f"Really delete folder '{folder_name}' and all its contents?\nThis action cannot be undone!",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # GitHub API doesn't directly support folder deletion
+            # We need to recursively delete all files in the folder
+            self.recursive_delete_folder(folder_path)
+    
+    def recursive_delete_folder(self, folder_path):
+        """Recursively delete all files in a folder"""
+        owner = self.user_data.get("login", "")
+        repo_name = self.current_repo
+        
+        # Get all files in the folder
+        ok, contents = self.api.get_contents(owner, repo_name, folder_path)
+        if not ok:
+            QMessageBox.warning(self, "Error", f"Failed to list folder contents: {contents}")
+            return
+        
+        if not isinstance(contents, list):
+            contents = [contents]
+        
+        # Track success and failure counts
+        success_count = 0
+        failure_count = 0
+        
+        # Process all items
+        for item in contents:
+            if item["type"] == "dir":
+                # Recursively delete subfolder
+                self.recursive_delete_folder(item["path"])
+            else:
+                # Delete file
+                message = f"Delete file {item['path']}"
+                ok, res = self.api.delete_file(owner, repo_name, item["path"], message, item["sha"])
+                if ok:
+                    success_count += 1
+                else:
+                    failure_count += 1
+        
+        # Show results
+        if failure_count == 0:
+            QMessageBox.information(self, "Success", f"Folder deleted successfully")
+        else:
+            QMessageBox.warning(self, "Partial Success", 
+                               f"Deleted {success_count} files, but failed to delete {failure_count} files")
+        
+        # Refresh directory listing
+        self.load_directory_contents()
+        self.selected_folder = None
+    
+    def show_create_repo_dialog(self):
+        """Show dialog to create a new repository"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Create Repository")
+        layout = QFormLayout(dialog)
+        
+        name_edit = QLineEdit()
+        desc_edit = QLineEdit()
+        private_check = QCheckBox()
+        
+        layout.addRow("Name:", name_edit)
+        layout.addRow("Description:", desc_edit)
+        layout.addRow("Private:", private_check)
+        
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addRow(buttons)
+        
+        if dialog.exec_():
+            name = name_edit.text().strip()
+            desc = desc_edit.text().strip()
+            private = private_check.isChecked()
+            
+            if not name:
+                QMessageBox.warning(self, "Error", "Repository name is required")
+                return
+                
+            self.create_repo(name, desc, private)
+    
+    def create_repo(self, name, desc, private):
+        """Create a new repository"""
+        ok, r = self.api.create_repo(name, desc, private)
+        if ok:
+            QMessageBox.information(
+                self, 
+                "Success", 
+                f"Repository '{name}' created successfully"
+            )
+            # Refresh repos
+            self.load_user_repos()
+            
+            # Select the newly created repo
+            index = self.cmb_repos.findText(name)
+            if index >= 0:
+                self.cmb_repos.setCurrentIndex(index)
+        else:
+            QMessageBox.warning(self, "Error", f"Failed to create repository: {r}")
+    
+    def browse_files(self):
+        """Open file browser to select files to upload"""
+        files, _ = QFileDialog.getOpenFileNames(self, "Select Files to Upload")
+        if files:
+            self.handle_file_drop(files)
+    
+    def go_back(self):
+        """Navigate back to the previous directory"""
+        if self.path_history:
+            # Get previous path
+            prev_path = self.path_history.pop()
+            self.current_path = prev_path
+            
+            # Update UI
+            self.path_label.setText(f"/{self.current_path}")
+            self.btn_back.setEnabled(bool(self.path_history))
+            
+            # Load directory contents
+            self.load_directory_contents()
+    
+    def on_repo_changed(self, index):
+        """Automatically load repo contents when a repo is selected"""
+        if index > 0:  # Skip placeholder item
+            self.current_repo = self.cmb_repos.currentText()
+            self.current_path = ""
+            self.path_history = []
+            self.btn_back.setEnabled(False)
+            self.path_label.setText("/")
+            self.load_directory_contents()
+    
+    def on_item_double_clicked(self, item, column):
+        """Handle double click on tree items (for directory navigation)"""
+        data = item.data(0, Qt.UserRole)
+        if not data:
+            return
+            
+        if data["type"] == "dir":
+            # Save selected folder (for delete operation)
+            self.selected_folder = data
+            
+            # Navigate into directory
+            self.path_history.append(self.current_path)
+            self.current_path = data["path"]
+            self.path_label.setText(f"/{self.current_path}")
+            self.btn_back.setEnabled(True)
+            self.load_directory_contents()
+    
+    def handle_file_drop(self, file_paths):
+        """Handle files dropped onto the drop area"""
+        owner = self.user_data.get("login", "")
+        repo_name = self.current_repo
+        
+        if not owner or not repo_name:
+            QMessageBox.warning(self, "Error", "Please select a repository first")
+            return
+            
+        upload_count = 0
+        failed_count = 0
+        
+        for path in file_paths:
+            try:
+                target_path = self.current_path
+                if target_path:
+                    target_path += "/"
+                target_path += os.path.basename(path)
+                
+                with open(path, 'rb') as fp:
+                    content = fp.read()
+                success, msg = self.api.upload_file(owner, repo_name, target_path, content)
+                if success:
+                    upload_count += 1
+                else:
+                    failed_count += 1
+            except Exception as e:
+                failed_count += 1
+        
+        # Show results and refresh the repo structure
+        if upload_count > 0:
+            QMessageBox.information(
+                self, 
+                "Success", 
                 f"Successfully uploaded {upload_count} file(s)" + 
                 (f"\nFailed to upload {failed_count} file(s)" if failed_count > 0 else "")
             )
@@ -1708,201 +2855,196 @@ class RepoBrowserTab(QWidget):
             else:
                 QMessageBox.warning(self, "Error", str(res))
 
-# Remove the ProfileEditDialog class as it's no longer needed
-# The profile editing functionality is now directly integrated in the ProfileTab
 
-class ProfileTab(QWidget):
-    """Enhanced Profile tab with additional features"""
-    def __init__(self, api, user_data, parent=None):
-        super().__init__(parent)
-        self.api = api
-        self.user_data = user_data
-        self.parent = parent
-        self.layout = QVBoxLayout(self)
-        
-        # User info section with editable fields
-        user_info_layout = QVBoxLayout()
-        
-        # Username and avatar row
-        username_row = QHBoxLayout()
-        self.lbl_avatar = AvatarLabel()
-        self.lbl_avatar.setFixedSize(60, 60)
-        if self.user_data.get('avatar_url'):
-            self.lbl_avatar.set_avatar(self.user_data['avatar_url'])
-            
-        # Username (not editable)
-        username_label = QLabel("User:")
-        username_label.setStyleSheet("font-weight: bold;")
-        self.username_value = QLabel(self.user_data.get('login', ''))
-        self.username_value.setStyleSheet("font-weight: bold; font-size: 14pt;")
-        
-        username_row.addWidget(self.lbl_avatar)
-        username_row.addWidget(username_label)
-        username_row.addWidget(self.username_value)
-        username_row.addStretch()
-        
-        user_info_layout.addLayout(username_row)
-        
-        # Editable fields
-        form_layout = QFormLayout()
-        
-        # Name field
-        self.name_edit = QLineEdit(self.user_data.get('name', ''))
-        form_layout.addRow("Name:", self.name_edit)
-        
-        # Bio field
-        self.bio_edit = QTextEdit()
-        self.bio_edit.setText(self.user_data.get('bio', ''))
-        self.bio_edit.setMaximumHeight(100)
-        form_layout.addRow("Bio:", self.bio_edit)
-        
-        # Location field
-        self.location_edit = QLineEdit(self.user_data.get('location', ''))
-        form_layout.addRow("Location:", self.location_edit)
-        
-        # Website field
-        self.website_edit = QLineEdit(self.user_data.get('blog', ''))
-        form_layout.addRow("Website:", self.website_edit)
-        
-        # Company field
-        self.company_edit = QLineEdit(self.user_data.get('company', ''))
-        form_layout.addRow("Company:", self.company_edit)
-        
-        # Save button
-        save_button = QPushButton("Save Profile")
-        save_button.clicked.connect(self.save_profile)
-        
-        user_info_layout.addLayout(form_layout)
-        user_info_layout.addWidget(save_button)
-        
-        self.layout.addLayout(user_info_layout)
-        
-        # Following section
-        following_group = QGroupBox("Users You Follow")
-        following_layout = QVBoxLayout(following_group)
-        
-        # Use a scroll area for the following list
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        
-        # Container for the user widgets
-        self.following_container = QWidget()
-        self.following_list_layout = QVBoxLayout(self.following_container)
-        self.following_list_layout.setAlignment(Qt.AlignTop)
-        
-        scroll_area.setWidget(self.following_container)
-        following_layout.addWidget(scroll_area)
-        
-        self.layout.addWidget(following_group)
-        
-        # Load following list automatically
-        self.fetch_following()
-        
-    def save_profile(self):
-        """Save the profile changes"""
-        ok, result = self.api.update_profile(
-            name=self.name_edit.text(),
-            bio=self.bio_edit.toPlainText(),
-            company=self.company_edit.text(),
-            location=self.location_edit.text(),
-            blog=self.website_edit.text()
-        )
-        
-        if ok:
-            # Update internal user data
-            self.user_data.update({
-                'name': self.name_edit.text(),
-                'bio': self.bio_edit.toPlainText(),
-                'company': self.company_edit.text(),
-                'location': self.location_edit.text(),
-                'blog': self.website_edit.text()
-            })
-            QMessageBox.information(self, "Success", "Profile updated successfully")
-        else:
-            QMessageBox.warning(self, "Error", f"Failed to update profile: {result}")
-            
-    def unfollow_user(self, username):
-        """Unfollow the specified user"""
-        reply = QMessageBox.question(
-            self,
-            "Confirm Unfollow",
-            f"Are you sure you want to unfollow {username}?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        
-        if reply == QMessageBox.Yes:
-            ok, msg = self.api.unfollow_user(username)
-            if ok:
-                QMessageBox.information(self, "Success", f"Successfully unfollowed {username}")
-                self.fetch_following()  # Refresh the following list
-            else:
-                QMessageBox.warning(self, "Error", f"Failed to unfollow: {msg}")
-
-    def fetch_following(self):
-        """Fetch and display the list of users being followed"""
-        # Clear existing widgets
-        while self.following_list_layout.count():
-            child = self.following_list_layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
-        
-        ok, data = self.api.get_following()
-        if ok:
-            for u in data:
-                user_widget = UserWidget(
-                    u["login"], 
-                    u["avatar_url"], 
-                    show_check=False,
-                    show_unfollow=True
-                )
-                user_widget.unfollow_clicked.connect(self.unfollow_user)
-                self.following_list_layout.addWidget(user_widget)
-                
-            # Add a spacer at the end
-            self.following_list_layout.addStretch()
-        else:
-            error_label = QLabel("Failed to fetch following list")
-            error_label.setStyleSheet("color: red;")
-            self.following_list_layout.addWidget(error_label)
-
-class MainWindow(QMainWindow):
-    def __init__(self, api, user_data, tokens):
+class ReadmeCreatorTab(QWidget):
+    """Tab for creating and editing GitHub README.md files"""
+    def __init__(self, api, user_data):
         super().__init__()
         self.api = api
         self.user_data = user_data
-        self.all_tokens = tokens
-        self.setWindowTitle(f"GitHub Management - {user_data.get('login', '')}")
-        self.resize(1150, 650)
-        self.tabs = QTabWidget()
-        self.setCentralWidget(self.tabs)
-
-        # Replace menubar with no items or no menubar-based account items
-        # We'll rely on the ExtendedToolBar instead
-        self.toolbar = ExtendedToolBar(
-            parent=self,
-            change_user_func=self.change_user,
-            manage_func=self.manage_tokens
-        )
-        self.addToolBar(self.toolbar)
+        layout = QVBoxLayout(self)
         
-        # Set dark style
-        self.setStyleSheet(DARK_STYLE)
-
-        self.build_users_tab()
-        self.build_star_tab()
-        self.build_profile_tab()  # Renamed from "Profile/Following" to "Profile"
-
-        # Add a new tab for repository browsing
-        self.build_repo_browser_tab()
+        # Top control row - Repository selector, save button, preview toggle
+        top_controls = QHBoxLayout()
+        repo_label = QLabel("Repository:")
+        self.repo_selector = QComboBox()
+        self.repo_selector.setMinimumWidth(200)
+        self.load_repos_btn = QPushButton("Load Repos")
+        self.load_repos_btn.clicked.connect(self.load_repositories)
+        self.save_btn = QPushButton("Save README")
+        self.save_btn.clicked.connect(self.save_readme)
+        self.preview_toggle = QPushButton("Preview")
+        self.preview_toggle.setCheckable(True)
+        self.preview_toggle.toggled.connect(self.toggle_preview)
         
-        # Status bar
-        self.status_bar = QStatusBar()
-        self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage(f"Logged in as {user_data.get('login', '')}")
+        top_controls.addWidget(repo_label)
+        top_controls.addWidget(self.repo_selector)
+        top_controls.addWidget(self.load_repos_btn)
+        top_controls.addWidget(self.save_btn)
+        top_controls.addWidget(self.preview_toggle)
+        top_controls.addStretch()
+        
+        # Template elements buttons
+        template_controls = QHBoxLayout()
+        self.template_buttons = [
+            ("Table", self.insert_table),
+            ("Header", self.insert_header),
+            ("List", self.insert_list),
+            ("Link", self.insert_link),
+            ("Image", self.insert_image),
+            ("Code Block", self.insert_code_block),
+            ("Badge", self.insert_badge),
+            ("Horizontal Rule", self.insert_hr)
+        ]
+        
+        for btn_text, btn_func in self.template_buttons:
+            btn = QPushButton(btn_text)
+            btn.clicked.connect(btn_func)
+            template_controls.addWidget(btn)
+        
+        # Main editor and preview area
+        self.editor_preview = QStackedWidget()
+        
+        # Editor
+        self.editor = QPlainTextEdit()
+        self.editor.setPlaceholderText("# Your README.md content here...\n\nStart writing your GitHub README or use the template buttons above.")
+        
+        # Preview
+        self.preview = MarkdownPreview()
+        
+        self.editor_preview.addWidget(self.editor)
+        self.editor_preview.addWidget(self.preview)
+        
+        # Connect editor changes to preview updates
+        self.editor.textChanged.connect(self.update_preview)
+        
+        # Add everything to the main layout
+        layout.addLayout(top_controls)
+        layout.addLayout(template_controls)
+        layout.addWidget(self.editor_preview)
+        
+        # Initial state
+        self.load_repositories()
+    
+    def load_repositories(self):
+        """Load user repositories into the combo box"""
+        self.repo_selector.clear()
+        ok, repos = self.api.get_repos()
+        if ok and isinstance(repos, list):
+            for repo in repos:
+                self.repo_selector.addItem(repo["name"])
+    
+    def toggle_preview(self, checked):
+        """Toggle between editor and preview views"""
+        if checked:
+            # Update preview before switching
+            self.update_preview()
+            self.editor_preview.setCurrentIndex(1)
+            self.preview_toggle.setText("Edit")
+        else:
+            self.editor_preview.setCurrentIndex(0)
+            self.preview_toggle.setText("Preview")
+    
+    def update_preview(self):
+        """Update markdown preview"""
+        content = self.editor.toPlainText()
+        self.preview.update_preview(content, "markdown")
+    
+    def save_readme(self):
+        """Save README.md to the selected repository"""
+        repo_name = self.repo_selector.currentText()
+        if not repo_name:
+            QMessageBox.warning(self, "Error", "Please select a repository")
+            return
+        
+        content = self.editor.toPlainText()
+        owner = self.user_data.get("login", "")
+        
+        # Check if README.md already exists in the repository
+        ok, result = self.api.get_contents(owner, repo_name, "README.md")
+        
+        if ok and isinstance(result, dict) and "sha" in result:
+            # Update existing README
+            sha = result["sha"]
+            success, msg = self.api.update_file(
+                owner, repo_name, "README.md", "Update README.md", content, sha
+            )
+        else:
+            # Create new README
+            success, msg = self.api.upload_file(
+                owner, repo_name, "README.md", content.encode('utf-8')
+            )
+        
+        if success:
+            QMessageBox.information(self, "Success", f"README.md saved to {repo_name}")
+        else:
+            QMessageBox.warning(self, "Error", f"Failed to save README.md: {msg}")
+    
+    # Template insertion functions
+    def insert_table(self):
+        """Insert a markdown table template"""
+        table = """
+| Header 1 | Header 2 | Header 3 |
+|----------|----------|----------|
+| Row 1    | Data     | Data     |
+| Row 2    | Data     | Data     |
+| Row 3    | Data     | Data     |
+"""
+        self.editor.insertPlainText(table)
+    
+    def insert_header(self):
+        """Insert header template"""
+        headers = """# Main Header
+## Secondary Header
+### Tertiary Header
+"""
+        self.editor.insertPlainText(headers)
+    
+    def insert_list(self):
+        """Insert list template"""
+        list_template = """
+- Item 1
+- Item 2
+- Item 3
+  - Nested item 1
+  - Nested item 2
+"""
+        self.editor.insertPlainText(list_template)
+    
+    def insert_link(self):
+        """Insert link template"""
+        self.editor.insertPlainText("[Link Text](https://example.com)")
+    
+    def insert_image(self):
+        """Insert image template"""
+        self.editor.insertPlainText("![Alt Text](https://example.com/image.png)")
+    
+    def insert_code_block(self):
+        """Insert code block template"""
+        code_block = """```python
+# Python code example
+def hello_world():
+    print("Hello, GitHub!")
+```"""
+        self.editor.insertPlainText(code_block)
+    
+    def insert_badge(self):
+        """Insert badge template"""
+        badge = "[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)"
+        self.editor.insertPlainText(badge)
+    
+    def insert_hr(self):
+        """Insert horizontal rule"""
+        self.editor.insertPlainText("\n---\n")
 
-    def build_users_tab(self):
-        w = QWidget()
-        ly = QVBoxLayout(w)
+class UsersTab(QWidget):
+    """Tab for finding users, renamed from 'Users' to 'Find Users'"""
+    def __init__(self, api, user_data):
+        super().__init__()
+        self.api = api
+        self.user_data = user_data
+        
+        ly = QVBoxLayout(self)
         h1 = QHBoxLayout()
         self.ed_search = QLineEdit()
         self.ed_search.setPlaceholderText("Search GitHub users...")
@@ -1954,88 +3096,6 @@ class MainWindow(QMainWindow):
         ly.addWidget(self.user_bar)
         ly.addWidget(self.user_log)
 
-        self.tabs.addTab(w, "Users")
-
-    def build_star_tab(self):
-        w = QWidget()
-        ly = QVBoxLayout(w)
-        top_h = QHBoxLayout()
-        self.ed_repos = QTextEdit()
-        self.ed_repos.setPlaceholderText("Enter repo URLs like https://github.com/owner/repo ...")
-        top_h.addWidget(self.ed_repos)
-        ly.addLayout(top_h)
-
-        btn_row = QHBoxLayout()
-        star_btn = QPushButton("Star")
-        unstar_btn = QPushButton("Unstar")
-        multi_star_btn = QPushButton("Multi-Acc Star")
-        multi_unstar_btn = QPushButton("Multi-Acc Unstar")
-        clr_btn = QPushButton("Clear")
-
-        star_btn.clicked.connect(self.star_repos)
-        unstar_btn.clicked.connect(self.unstar_repos)
-        multi_star_btn.clicked.connect(self.multi_star)
-        multi_unstar_btn.clicked.connect(self.multi_unstar)
-        clr_btn.clicked.connect(lambda: self.ed_repos.clear())
-
-        btn_row.addWidget(star_btn)
-        btn_row.addWidget(unstar_btn)
-        btn_row.addWidget(multi_star_btn)
-        btn_row.addWidget(multi_unstar_btn)
-        btn_row.addWidget(clr_btn)
-
-        ly.addLayout(btn_row)
-
-        self.repo_bar = QProgressBar()
-        self.repo_log = QTextEdit()
-        self.repo_log.setReadOnly(True)
-        self.repo_log.setMaximumHeight(120)
-        ly.addWidget(self.repo_bar)
-        ly.addWidget(self.repo_log)
-
-        self.tabs.addTab(w, "Star Repos")
-
-    def build_profile_tab(self):
-        """Build the enhanced Profile tab"""
-        self.profile_tab = ProfileTab(self.api, self.user_data, self)
-        self.tabs.addTab(self.profile_tab, "Profile")
-
-    def build_repo_browser_tab(self):
-        """New tab for browsing and editing files in the user's repos."""
-        self.repo_browser_tab = RepoBrowserTab(self.api, self.user_data)
-        self.tabs.addTab(self.repo_browser_tab, "Repo Browser")
-
-    ################################
-    #    Users Tab Methods         #
-    ################################
-
-    def change_user(self, token, user_data):
-        """Change to a different GitHub user"""
-        # Update the API and user data
-        self.api = GitHubAPI(token)
-        self.user_data = user_data
-        
-        # Update window title
-        self.setWindowTitle(f"GitHub Management - {user_data.get('login', '')}")
-        
-        # Update status bar
-        self.status_bar.showMessage(f"Logged in as {user_data.get('login', '')}")
-        
-        # Update UI with new user data
-        self.profile_tab = ProfileTab(self.api, self.user_data, self)
-        self.tabs.removeTab(2)  # Remove old profile tab
-        self.tabs.insertTab(2, self.profile_tab, "Profile")
-        
-        # Refresh repo browser
-        self.repo_browser_tab = RepoBrowserTab(self.api, self.user_data)
-        self.tabs.removeTab(3)  # Remove old repo browser tab
-        self.tabs.insertTab(3, self.repo_browser_tab, "Repo Browser")
-        
-        # Set focus on profile tab to show the change
-        self.tabs.setCurrentIndex(2)
-        
-        QMessageBox.information(self, "User Changed", f"Switched to user: {user_data.get('login', '')}")
-    
     def select_all_users(self):
         for i in range(self.list_users.count()):
             w = self.list_users.itemWidget(self.list_users.item(i))
@@ -2084,9 +3144,16 @@ class MainWindow(QMainWindow):
             w = self.list_users.itemWidget(self.list_users.item(i))
             if w and w.is_checked():
                 selected.append(w.username)
-        if len(self.all_tokens) <= 1 or not selected:
+        
+        # Get tokens from parent
+        all_tokens = {}
+        if hasattr(self.parent(), 'all_tokens'):
+            all_tokens = self.parent().all_tokens
+        
+        if len(all_tokens) <= 1 or not selected:
             return
-        dlg = MultiTokenDialog(self.all_tokens, self)
+        
+        dlg = MultiTokenDialog(all_tokens, self)
         if dlg.exec_():
             tokens = dlg.selected_tokens
             self.user_log.clear()
@@ -2102,9 +3169,16 @@ class MainWindow(QMainWindow):
             w = self.list_users.itemWidget(self.list_users.item(i))
             if w and w.is_checked():
                 selected.append(w.username)
-        if len(self.all_tokens) <= 1 or not selected:
+                
+        # Get tokens from parent
+        all_tokens = {}
+        if hasattr(self.parent(), 'all_tokens'):
+            all_tokens = self.parent().all_tokens
+            
+        if len(all_tokens) <= 1 or not selected:
             return
-        dlg = MultiTokenDialog(self.all_tokens, self)
+            
+        dlg = MultiTokenDialog(all_tokens, self)
         if dlg.exec_():
             tokens = dlg.selected_tokens
             self.user_log.clear()
@@ -2137,10 +3211,49 @@ class MainWindow(QMainWindow):
             self.user_log.append(str(res))
             QMessageBox.warning(self, "Search Error", f"Failed to search for users: {res}")
 
-    ################################
-    #  Star / Unstar Repos Methods #
-    ################################
 
+class StarsTab(QWidget):
+    """Tab for starring repositories"""
+    def __init__(self, api, user_data):
+        super().__init__()
+        self.api = api
+        self.user_data = user_data
+        
+        ly = QVBoxLayout(self)
+        top_h = QHBoxLayout()
+        self.ed_repos = QTextEdit()
+        self.ed_repos.setPlaceholderText("Enter repo URLs like https://github.com/owner/repo ...")
+        top_h.addWidget(self.ed_repos)
+        ly.addLayout(top_h)
+
+        btn_row = QHBoxLayout()
+        star_btn = QPushButton("Star")
+        unstar_btn = QPushButton("Unstar")
+        multi_star_btn = QPushButton("Multi-Acc Star")
+        multi_unstar_btn = QPushButton("Multi-Acc Unstar")
+        clr_btn = QPushButton("Clear")
+
+        star_btn.clicked.connect(self.star_repos)
+        unstar_btn.clicked.connect(self.unstar_repos)
+        multi_star_btn.clicked.connect(self.multi_star)
+        multi_unstar_btn.clicked.connect(self.multi_unstar)
+        clr_btn.clicked.connect(lambda: self.ed_repos.clear())
+
+        btn_row.addWidget(star_btn)
+        btn_row.addWidget(unstar_btn)
+        btn_row.addWidget(multi_star_btn)
+        btn_row.addWidget(multi_unstar_btn)
+        btn_row.addWidget(clr_btn)
+
+        ly.addLayout(btn_row)
+
+        self.repo_bar = QProgressBar()
+        self.repo_log = QTextEdit()
+        self.repo_log.setReadOnly(True)
+        self.repo_log.setMaximumHeight(120)
+        ly.addWidget(self.repo_bar)
+        ly.addWidget(self.repo_log)
+        
     def star_repos(self):
         lines = [l.strip() for l in self.ed_repos.toPlainText().split('\n') if l.strip()]
         if not lines:
@@ -2165,9 +3278,16 @@ class MainWindow(QMainWindow):
 
     def multi_star(self):
         lines = [l.strip() for l in self.ed_repos.toPlainText().split('\n') if l.strip()]
-        if not lines or len(self.all_tokens) <= 1:
+        
+        # Get tokens from parent
+        all_tokens = {}
+        if hasattr(self.parent(), 'all_tokens'):
+            all_tokens = self.parent().all_tokens
+            
+        if not lines or len(all_tokens) <= 1:
             return
-        dlg = MultiTokenDialog(self.all_tokens, self)
+            
+        dlg = MultiTokenDialog(all_tokens, self)
         if dlg.exec_():
             tokens = dlg.selected_tokens
             self.repo_log.clear()
@@ -2179,9 +3299,16 @@ class MainWindow(QMainWindow):
 
     def multi_unstar(self):
         lines = [l.strip() for l in self.ed_repos.toPlainText().split('\n') if l.strip()]
-        if not lines or len(self.all_tokens) <= 1:
+        
+        # Get tokens from parent
+        all_tokens = {}
+        if hasattr(self.parent(), 'all_tokens'):
+            all_tokens = self.parent().all_tokens
+            
+        if not lines or len(all_tokens) <= 1:
             return
-        dlg = MultiTokenDialog(self.all_tokens, self)
+            
+        dlg = MultiTokenDialog(all_tokens, self)
         if dlg.exec_():
             tokens = dlg.selected_tokens
             self.repo_log.clear()
@@ -2190,99 +3317,222 @@ class MainWindow(QMainWindow):
             self.mus_thread.progress.connect(lambda p, m: [self.repo_bar.setValue(p), self.repo_log.append(m)])
             self.mus_thread.done.connect(lambda s, msg: self.repo_log.append(msg))
             self.mus_thread.start()
+
+
+class UserSelectorWidget(QWidget):
+    """Widget for user selection and token management"""
+    user_changed = pyqtSignal(str, dict)
+    tokens_managed = pyqtSignal()
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent = parent
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        # User selector dropdown
+        self.user_selector = QComboBox()
+        self.user_selector.setMinimumWidth(200)
+        self.user_selector.currentIndexChanged.connect(self.on_user_changed)
+        layout.addWidget(self.user_selector)
+        
+        # Manage tokens button
+        self.manage_tokens_btn = QPushButton("Manage Tokens")
+        self.manage_tokens_btn.clicked.connect(self.on_manage_tokens)
+        layout.addWidget(self.manage_tokens_btn)
+        
+        # Add stretch for spacing
+        layout.addStretch()
+        
+        self.setLayout(layout)
+        
+    def load_users(self, current_user=None):
+        """Load available GitHub users from tokens"""
+        self.user_selector.clear()
+        self.users_data = {}
+        
+        load_dotenv(find_dotenv(usecwd=True))
+        for k, v in os.environ.items():
+            if k.startswith("GITHUB_TOKEN_"):
+                api = GitHubAPI(v)
+                ok, data = api.validate_token()
+                if ok:
+                    username = data['login']
+                    self.user_selector.addItem(username)
+                    self.users_data[username] = (k[13:], v, data)  # Store token name, token value, and user data
+        
+        # Set current user if provided
+        if current_user:
+            index = self.user_selector.findText(current_user)
+            if index >= 0:
+                self.user_selector.setCurrentIndex(index)
+    
+    def on_user_changed(self, index):
+        """Handle user selection change"""
+        if index < 0:
+            return
             
-    ################################
-    #   Toolbar Actions Handlers   #
-    ################################
-
-    def manage_tokens(self):
+        username = self.user_selector.currentText()
+        if username in self.users_data:
+            token_name, token, user_data = self.users_data[username]
+            self.user_changed.emit(token, user_data)
+    
+    def on_manage_tokens(self):
+        """Open token management dialog"""
         dlg = TokenManagerDialog(self)
-        dlg.exec_()
-
-    def search_users(self):
-        q = self.ed_search.text().strip()
-        if not q:
-            return
-        self.list_users.clear()
-        self.user_log.clear()
-        self.user_log.append(f"Searching '{q}' ...")
-
-        ok, res = self.api.search_users(q)
-        if ok:
-            for user in res:
-                s_ok, ud = self.api.get_user_info(user["login"])
-                av = ud["avatar_url"] if s_ok else user["avatar_url"]
-                item = QListWidgetItem()
-                uw = UserWidget(user["login"], av, show_check=True)
-                item.setSizeHint(uw.sizeHint())
-                self.list_users.addItem(item)
-                self.list_users.setItemWidget(item, uw)
-            self.user_log.append(f"Found {len(res)} users.")
-        else:
-            self.user_log.append(str(res))
-            QMessageBox.warning(self, "Search Error", f"Failed to search for users: {res}")
-
-    ################################
-    #  Star / Unstar Repos Methods #
-    ################################
-
-    def star_repos(self):
-        lines = [l.strip() for l in self.ed_repos.toPlainText().split('\n') if l.strip()]
-        if not lines:
-            return
-        self.repo_log.clear()
-        self.repo_bar.setValue(0)
-        self.star_thread = ActionThread(self.api, 'star', lines)
-        self.star_thread.progress.connect(lambda p, m: [self.repo_bar.setValue(p), self.repo_log.append(m)])
-        self.star_thread.done.connect(lambda s, msg: self.repo_log.append(msg))
-        self.star_thread.start()
-
-    def unstar_repos(self):
-        lines = [l.strip() for l in self.ed_repos.toPlainText().split('\n') if l.strip()]
-        if not lines:
-            return
-        self.repo_log.clear()
-        self.repo_bar.setValue(0)
-        self.unstar_thread = ActionThread(self.api, 'unstar', lines)
-        self.unstar_thread.progress.connect(lambda p, m: [self.repo_bar.setValue(p), self.repo_log.append(m)])
-        self.unstar_thread.done.connect(lambda s, msg: self.repo_log.append(msg))
-        self.unstar_thread.start()
-
-    def multi_star(self):
-        lines = [l.strip() for l in self.ed_repos.toPlainText().split('\n') if l.strip()]
-        if not lines or len(self.all_tokens) <= 1:
-            return
-        dlg = MultiTokenDialog(self.all_tokens, self)
         if dlg.exec_():
-            tokens = dlg.selected_tokens
-            self.repo_log.clear()
-            self.repo_bar.setValue(0)
-            self.ms_thread = MultiAccountThread(tokens, 'star', lines)
-            self.ms_thread.progress.connect(lambda p, m: [self.repo_bar.setValue(p), self.repo_log.append(m)])
-            self.ms_thread.done.connect(lambda s, msg: self.repo_log.append(msg))
-            self.ms_thread.start()
+            self.load_users(self.user_selector.currentText())
+            self.tokens_managed.emit()
 
-    def multi_unstar(self):
-        lines = [l.strip() for l in self.ed_repos.toPlainText().split('\n') if l.strip()]
-        if not lines or len(self.all_tokens) <= 1:
-            return
-        dlg = MultiTokenDialog(self.all_tokens, self)
-        if dlg.exec_():
-            tokens = dlg.selected_tokens
-            self.repo_log.clear()
-            self.repo_bar.setValue(0)
-            self.mus_thread = MultiAccountThread(tokens, 'unstar', lines)
-            self.mus_thread.progress.connect(lambda p, m: [self.repo_bar.setValue(p), self.repo_log.append(m)])
-            self.mus_thread.done.connect(lambda s, msg: self.repo_log.append(msg))
-            self.mus_thread.start()
-            
-    ################################
-    #   Toolbar Actions Handlers   #
-    ################################
 
-    def manage_tokens(self):
-        dlg = TokenManagerDialog(self)
-        dlg.exec_()
+class CustomMainWindow(QMainWindow):
+    """Custom main window with sidebar navigation and no standard decorations"""
+    def __init__(self, api, user_data, tokens):
+        super().__init__()
+        self.api = api
+        self.user_data = user_data
+        self.all_tokens = tokens
+        
+        # Remove standard window decorations
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        
+        # Set window size and title
+        self.setMinimumSize(1150, 650)
+        self.setWindowTitle(f"GitHub Management - {user_data.get('login', '')}")
+        
+        # Set dark style
+        self.setStyleSheet(DARK_STYLE)
+        
+        # Create custom title bar
+        self.title_bar = TitleBar(self)
+        
+        # Main widget and layout
+        main_widget = QWidget()
+        main_layout = QVBoxLayout(main_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Add title bar to the main layout
+        main_layout.addWidget(self.title_bar)
+        
+        # Create horizontal layout for sidebar and content
+        content_layout = QHBoxLayout()
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+        
+        # Create sidebar for navigation
+        self.sidebar = SidebarWidget(self)
+        
+        # Connect account selector signals
+        self.sidebar.account_selector.user_changed.connect(self.change_user)
+        self.sidebar.account_selector.tokens_managed.connect(self.refresh_tokens)
+        self.sidebar.account_selector.load_users(user_data.get('login'))
+        
+        # Create stacked widget for content
+        self.content_stack = QStackedWidget()
+        
+        # Add sidebar and content stack to layout
+        content_layout.addWidget(self.sidebar)
+        content_layout.addWidget(self.content_stack, 1)
+        
+        # Add content layout to main layout
+        main_layout.addLayout(content_layout, 1)
+        
+        # Set central widget
+        self.setCentralWidget(main_widget)
+        
+        # Initialize tabs and sidebar buttons
+        self.init_tabs()
+        
+        
+        # Status bar
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.status_bar.showMessage(f"Logged in as {user_data.get('login', '')}")
+    
+    def init_tabs(self):
+        """Initialize all tabs and sidebar buttons"""
+        # Create tabs
+        self.users_tab = UsersTab(self.api, self.user_data)
+        self.stars_tab = StarsTab(self.api, self.user_data)
+        self.profile_tab = ProfileTab(self.api, self.user_data, self)
+        self.repo_browser_tab = ModifiedRepoBrowserTab(self.api, self.user_data)
+        self.readme_creator_tab = ReadmeCreatorTab(self.api, self.user_data)
+        
+        # Add tabs to content stack
+        self.content_stack.addWidget(self.users_tab)          # Index 0
+        self.content_stack.addWidget(self.stars_tab)          # Index 1
+        self.content_stack.addWidget(self.profile_tab)        # Index 2
+        self.content_stack.addWidget(self.repo_browser_tab)   # Index 3
+        self.content_stack.addWidget(self.readme_creator_tab) # Index 4
+        
+        # Add buttons to sidebar
+        self.find_users_btn = self.sidebar.add_button("Find Users", 0)
+        self.star_repos_btn = self.sidebar.add_button("Star Repos", 1)
+        self.profile_btn = self.sidebar.add_button("Profile", 2)
+        self.repo_browser_btn = self.sidebar.add_button("Repo Browser", 3)
+        self.readme_creator_btn = self.sidebar.add_button("Readme Creator", 4)
+        
+        # Add spacer and stretch
+        self.sidebar.add_spacer()
+        self.sidebar.add_stretch()
+        
+        # Connect button signals
+        self.sidebar.button_group.buttonClicked.connect(self.on_sidebar_button_clicked)
+        
+        # Set default tab
+        self.find_users_btn.setChecked(True)
+        self.content_stack.setCurrentIndex(0)
+    
+    def on_sidebar_button_clicked(self, button):
+        """Handle sidebar button clicks"""
+        index = button.property("tab_index")
+        self.content_stack.setCurrentIndex(index)
+    
+    def change_user(self, token, user_data):
+        """Change to a different GitHub user"""
+    # Update the API and user data
+        self.api = GitHubAPI(token)
+        self.user_data = user_data
+    
+    # Update status bar
+        self.status_bar.showMessage(f"Logged in as {user_data.get('login', '')}")
+    
+    # Recreate all tabs with new user data
+        self.users_tab = UsersTab(self.api, self.user_data)
+        self.stars_tab = StarsTab(self.api, self.user_data)
+        self.profile_tab = ProfileTab(self.api, self.user_data, self)
+        self.repo_browser_tab = ModifiedRepoBrowserTab(self.api, self.user_data)
+        self.readme_creator_tab = ReadmeCreatorTab(self.api, self.user_data)
+    
+    # Replace tabs in content stack
+        current_index = self.content_stack.currentIndex()
+        self.content_stack.removeWidget(self.content_stack.widget(0))
+        self.content_stack.removeWidget(self.content_stack.widget(0))
+        self.content_stack.removeWidget(self.content_stack.widget(0))
+        self.content_stack.removeWidget(self.content_stack.widget(0))
+        self.content_stack.removeWidget(self.content_stack.widget(0))
+    
+        self.content_stack.addWidget(self.users_tab)
+        self.content_stack.addWidget(self.stars_tab)
+        self.content_stack.addWidget(self.profile_tab)
+        self.content_stack.addWidget(self.repo_browser_tab)
+        self.content_stack.addWidget(self.readme_creator_tab)
+    
+    # Restore current index
+        self.content_stack.setCurrentIndex(current_index)
+    
+        QMessageBox.information(self, "User Changed", f"Switched to user: {user_data.get('login', '')}")
+    
+    def refresh_tokens(self):
+        """Reload available tokens"""
+        self.all_tokens = {}
+        load_dotenv(find_dotenv(usecwd=True))
+        for k, v in os.environ.items():
+            if k.startswith("GITHUB_TOKEN_"):
+                self.all_tokens[k[13:]] = v
+
 
 def main():
     app = QApplication(sys.argv)
@@ -2299,10 +3549,11 @@ def main():
     lw = LoginWindow()
     if lw.exec_():
         if lw.selected_token and lw.selected_user:
-            mw = MainWindow(GitHubAPI(lw.selected_token), lw.selected_user, all_tokens)
+            mw = CustomMainWindow(GitHubAPI(lw.selected_token), lw.selected_user, all_tokens)
             mw.show()
             return app.exec_()
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
