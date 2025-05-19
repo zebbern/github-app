@@ -1,7 +1,4 @@
 <div align="center">
-
-<img src="https://github.com/user-attachments/assets/54141f1c-8a6f-4570-a7b3-4ea87e911ecf" alt="GitHub App Screenshot" width="80"/>
-<kbd>
   
 <h3 align="center">
     
@@ -9,8 +6,7 @@
   
 </h3>
 
-</kbd>
-<img src="https://github.com/user-attachments/assets/54141f1c-8a6f-4570-a7b3-4ea87e911ecf" alt="GitHub App Screenshot" width="80"/>
+<img src="https://github.com/user-attachments/assets/54141f1c-8a6f-4570-a7b3-4ea87e911ecf" alt="GitHub App Screenshot" width="160"/>
 
 <br>
 <br>
@@ -100,7 +96,7 @@ python github.py
     <table>
       <tr>
         <td align="center">
-          <img src="https://github.com/user-attachments/assets/4f09ec03-03a6-45f2-bb2c-1b9c4f800bdf" alt="User Management" width="500"/>
+          <img src="https://github.com/user-attachments/assets/de4775dd-cb9a-4855-890f-5a541b6a8592" alt="User Management" width="500"/>
           <br>
           <sub>Profile Management</sup>
         </td>
@@ -129,7 +125,7 @@ python github.py
           <sub>Repository Editor</sub>
         </td>
         <td align="center">
-          <img src="https://github.com/user-attachments/assets/3f1efc10-9e40-4229-81e5-cc0b8bc445c1" alt="Token Management" width="500"/>
+          <img src="https://github.com/user-attachments/assets/6596da18-fefd-4389-920b-25cac11da069" alt="Token Management" width="500"/>
           <br>
           <sub>Login Interface</sub>
         </td>
