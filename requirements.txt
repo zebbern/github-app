@@ -1,0 +1,5 @@
+PyQt5
+PyQtWebEngine
+requests
+python-dotenv
+markdown
